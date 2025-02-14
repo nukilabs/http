@@ -185,7 +185,7 @@ func (h Header) SortedKeyValues(exclude map[string]bool) (kvs []KeyValues, hs *H
 	}
 	var ordermap map[string]int
 	if order, ok := h[HeaderOrderKey]; ok {
-		ordermap := make(map[string]int, len(order))
+		ordermap = make(map[string]int, len(order))
 		for i, k := range order {
 			ordermap[strings.ToLower(k)] = i
 		}
