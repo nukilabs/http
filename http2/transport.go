@@ -2914,7 +2914,7 @@ func (b transportResponseBody) Read(p []byte) (n int, err error) {
 		cc.wmu.Lock()
 		defer cc.wmu.Unlock()
 		if connAdd != 0 {
-			cc.fr.WriteWindowUpdate(0, mustUint31(connAdd))
+			// cc.fr.WriteWindowUpdate(0, mustUint31(connAdd))
 		}
 		if streamAdd != 0 {
 			cc.fr.WriteWindowUpdate(cs.ID, mustUint31(streamAdd))
@@ -2945,7 +2945,7 @@ func (b transportResponseBody) Close() error {
 		cc.wmu.Lock()
 		// Return connection-level flow control.
 		if connAdd > 0 {
-			cc.fr.WriteWindowUpdate(0, uint32(connAdd))
+			// cc.fr.WriteWindowUpdate(0, uint32(connAdd))
 		}
 		cc.bw.Flush()
 		cc.wmu.Unlock()
