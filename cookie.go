@@ -37,6 +37,7 @@ type Cookie struct {
 	MaxAge      int
 	Secure      bool
 	HttpOnly    bool
+	HostOnly    bool
 	SameSite    SameSite
 	Partitioned bool
 	Raw         string

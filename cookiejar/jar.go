@@ -231,6 +231,7 @@ func (j *Jar) cookies(u *url.URL, now time.Time) (cookies []*http.Cookie) {
 			Expires:  e.Expires,
 			Secure:   e.Secure,
 			HttpOnly: e.HttpOnly,
+			HostOnly: e.HostOnly,
 		})
 	}
 
