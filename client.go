@@ -689,7 +689,7 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 
 			// Add the Referer header from the most recent
 			// request URL to the new one, if it's not https->http:
-			if ref := refererForURL(reqs[len(reqs)-1].URL, req.URL, req.Header.Get("Referer")); ref != "" {
+			if ref := refererForURL(reqs[len(reqs)-1].URL, req.URL, req.Header.referer()); ref != "" {
 				req.Header.Set("Referer", ref)
 			}
 			err = c.checkRedirect(req, reqs)

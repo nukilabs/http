@@ -88,6 +88,14 @@ func (h Header) has(key string) bool {
 	return ok
 }
 
+// referer gets the referer from the request headers.
+func (h Header) referer() string {
+	if val := h.get("referer"); val != "" {
+		return val
+	}
+	return h.get("Referer")
+}
+
 // Del deletes the values associated with key.
 // The key is case insensitive; it is canonicalized by
 // [CanonicalHeaderKey].
