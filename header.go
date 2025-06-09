@@ -73,6 +73,11 @@ func (h Header) Values(key string) []string {
 	return textproto.MIMEHeader(h).Values(key)
 }
 
+// set is like Set, but key must already be in CanonicalHeaderKey form.
+func (h Header) set(key, value string) {
+	h[key] = []string{value}
+}
+
 // get is like Get, but key must already be in CanonicalHeaderKey form.
 func (h Header) get(key string) string {
 	if v := h[key]; len(v) > 0 {
@@ -86,14 +91,6 @@ func (h Header) get(key string) string {
 func (h Header) has(key string) bool {
 	_, ok := h[key]
 	return ok
-}
-
-// referer gets the referer from the request headers.
-func (h Header) referer() string {
-	if val := h.get("referer"); val != "" {
-		return val
-	}
-	return h.get("Referer")
 }
 
 // Del deletes the values associated with key.
