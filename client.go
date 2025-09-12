@@ -491,7 +491,7 @@ func alwaysFalse() bool { return false }
 // control how redirects are processed. If returned, the next request
 // is not sent and the most recent response is returned with its body
 // unclosed.
-var ErrUseLastResponse = errors.New("github.com/nukilabs/http: use last response")
+var ErrUseLastResponse = errors.New("nukilabs/http: use last response")
 
 // checkRedirect calls either the user's configured CheckRedirect
 // function, or the default.
@@ -673,6 +673,7 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 					resp.closeBody()
 					return nil, uerr(err)
 				}
+				req.GetBody = ireq.GetBody
 				req.ContentLength = ireq.ContentLength
 			}
 
@@ -814,7 +815,8 @@ func (c *Client) makeHeadersCopier(ireq *Request) func(req *Request, stripSensit
 		for k, vv := range ireqhdr {
 			sensitive := false
 			switch CanonicalHeaderKey(k) {
-			case "Authorization", "Www-Authenticate", "Cookie", "Cookie2":
+			case "Authorization", "Www-Authenticate", "Cookie", "Cookie2",
+				"Proxy-Authorization", "Proxy-Authenticate":
 				sensitive = true
 			}
 			if !(sensitive && stripSensitiveHeaders) {
@@ -863,7 +865,7 @@ func Post(url, contentType string, body io.Reader) (resp *Response, err error) {
 // To make a request with a specified context.Context, use [NewRequestWithContext]
 // and [Client.Do].
 //
-// See the Client.Do method documentation for details on how redirects
+// See the [Client.Do] method documentation for details on how redirects
 // are handled.
 func (c *Client) Post(url, contentType string, body io.Reader) (resp *Response, err error) {
 	req, err := NewRequest("POST", url, body)
@@ -903,7 +905,7 @@ func PostForm(url string, data url.Values) (resp *Response, err error) {
 // When err is nil, resp always contains a non-nil resp.Body.
 // Caller should close resp.Body when done reading from it.
 //
-// See the Client.Do method documentation for details on how redirects
+// See the [Client.Do] method documentation for details on how redirects
 // are handled.
 //
 // To make a request with a specified context.Context, use [NewRequestWithContext]

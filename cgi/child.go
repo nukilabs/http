@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/nukilabs/http"
-
 	tls "github.com/nukilabs/utls"
 )
 

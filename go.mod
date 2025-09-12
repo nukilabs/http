@@ -4,6 +4,7 @@ go 1.25
 
 require (
 	github.com/nukilabs/utls v1.1.1
+	golang.org/x/net v0.44.0
 	golang.org/x/text v0.29.0
 )
 

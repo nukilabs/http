@@ -17,9 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	tls "github.com/nukilabs/utls"
-
 	"github.com/nukilabs/http/httpguts"
+	tls "github.com/nukilabs/utls"
 )
 
 var respExcludeHeader = map[string]bool{

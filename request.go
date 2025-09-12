@@ -230,7 +230,7 @@ type Request struct {
 	// ":authority" pseudo-header field.
 	// It may be of the form "host:port". For international domain
 	// names, Host may be in Punycode or Unicode form. Use
-	// github.com/nukilabs/http/idna to convert it to either format if
+	// golang.org/x/net/idna to convert it to either format if
 	// needed.
 	// To prevent DNS rebinding attacks, server Handlers should
 	// validate that the Host header has a value for which the
@@ -654,7 +654,7 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 		}
 	}
 	if stringContainsCTLByte(ruri) {
-		return errors.New("github.com/nukilabs/http: can't write control character in Request.URL")
+		return errors.New("nukilabs/http: can't write control character in Request.URL")
 	}
 	// TODO: validate r.Method too? At least it's less likely to
 	// come from an attacker (more likely to be a constant in
@@ -843,7 +843,7 @@ func validMethod(method string) bool {
 	   extension-method = token
 	     token          = 1*<any CHAR except CTLs or separators>
 	*/
-	return len(method) > 0 && strings.IndexFunc(method, isNotToken) == -1
+	return isToken(method)
 }
 
 // NewRequest wraps [NewRequestWithContext] using [context.Background].
@@ -866,7 +866,7 @@ func NewRequest(method, url string, body io.Reader) (*Request, error) {
 // For an outgoing client request, the context
 // controls the entire lifetime of a request and its response:
 // obtaining a connection, sending the request, and reading the
-// response headers and body. See the Request type's documentation for
+// response headers and body. See the [Request] type's documentation for
 // the difference between inbound and outbound request fields.
 //
 // If body is of type [*bytes.Buffer], [*bytes.Reader], or
@@ -882,10 +882,10 @@ func NewRequestWithContext(ctx context.Context, method, url string, body io.Read
 		method = "GET"
 	}
 	if !validMethod(method) {
-		return nil, fmt.Errorf("github.com/nukilabs/http: invalid method %q", method)
+		return nil, fmt.Errorf("nukilabs/http: invalid method %q", method)
 	}
 	if ctx == nil {
-		return nil, errors.New("github.com/nukilabs/http: nil Context")
+		return nil, errors.New("nukilabs/http: nil Context")
 	}
 	u, err := urlpkg.Parse(url)
 	if err != nil {
@@ -1050,7 +1050,7 @@ func ReadRequest(b *bufio.Reader) (*Request, error) {
 	}
 
 	delete(req.Header, "Host")
-	return req, err
+	return req, nil
 }
 
 // readRequest should be an internal detail,

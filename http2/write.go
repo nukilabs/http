@@ -13,6 +13,7 @@ import (
 	"github.com/nukilabs/http"
 	"github.com/nukilabs/http/http2/hpack"
 	"github.com/nukilabs/http/httpguts"
+	"github.com/nukilabs/http/internal/httpcommon"
 )
 
 // writeFramer is implemented by any type that is used to write frames.
@@ -351,7 +352,7 @@ func encodeHeaders(enc *hpack.Encoder, h http.Header, keys []string) {
 	}
 	for _, k := range keys {
 		vv := h[k]
-		k, ascii := lowerHeader(k)
+		k, ascii := httpcommon.LowerHeader(k)
 		if !ascii {
 			// Skip writing invalid headers. Per RFC 7540, Section 8.1.2, header
 			// field names have to be ASCII characters (just as in HTTP/1.x).

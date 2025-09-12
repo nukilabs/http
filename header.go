@@ -35,7 +35,7 @@ type Header map[string][]string
 // According to RFC2616 it is good practice to send general-header fields
 // first, followed by request-header or response-header fields and ending
 // with entity-header fields.
-const HeaderOrderKey = "Header-Order:"
+const HeaderOrderKey = "Header-Order"
 
 // Add adds the key, value pair to the header.
 // It appends to any existing values associated with key.

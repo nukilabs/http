@@ -590,13 +590,13 @@ func (t *Transport) roundTrip(req *Request) (_ *Response, err error) {
 		// Validate the outgoing headers.
 		if err := validateHeaders(req.Header); err != "" {
 			req.closeBody()
-			return nil, fmt.Errorf("github.com/nukilabs/http: invalid header %s", err)
+			return nil, fmt.Errorf("nukilabs/http: invalid header %s", err)
 		}
 
 		// Validate the outgoing trailers too.
 		if err := validateHeaders(req.Trailer); err != "" {
 			req.closeBody()
-			return nil, fmt.Errorf("github.com/nukilabs/http: invalid trailer %s", err)
+			return nil, fmt.Errorf("nukilabs/http: invalid trailer %s", err)
 		}
 	}
 
@@ -619,7 +619,7 @@ func (t *Transport) roundTrip(req *Request) (_ *Response, err error) {
 	}
 	if req.Method != "" && !validMethod(req.Method) {
 		req.closeBody()
-		return nil, fmt.Errorf("github.com/nukilabs/http: invalid method %q", req.Method)
+		return nil, fmt.Errorf("nukilabs/http: invalid method %q", req.Method)
 	}
 	if req.URL.Host == "" {
 		req.closeBody()
@@ -740,7 +740,7 @@ func awaitLegacyCancel(ctx context.Context, cancel context.CancelCauseFunc, req 
 	}
 }
 
-var errCannotRewind = errors.New("github.com/nukilabs/http: cannot rewind body after connection loss")
+var errCannotRewind = errors.New("nukilabs/http: cannot rewind body after connection loss")
 
 type readTrackingBody struct {
 	io.ReadCloser
@@ -845,7 +845,7 @@ func (pc *persistConn) shouldRetryRequest(req *Request, err error) bool {
 }
 
 // ErrSkipAltProtocol is a sentinel error value defined by Transport.RegisterProtocol.
-var ErrSkipAltProtocol = errors.New("github.com/nukilabs/http: skip alternate protocol")
+var ErrSkipAltProtocol = errors.New("nukilabs/http: skip alternate protocol")
 
 // RegisterProtocol registers a new protocol with scheme.
 // The [Transport] will pass requests using the given scheme to rt.
@@ -1020,7 +1020,7 @@ type transportReadFromServerError struct {
 func (e transportReadFromServerError) Unwrap() error { return e.err }
 
 func (e transportReadFromServerError) Error() string {
-	return fmt.Sprintf("github.com/nukilabs/http: Transport failed to read from server: %v", e.err)
+	return fmt.Sprintf("nukilabs/http: Transport failed to read from server: %v", e.err)
 }
 
 func (t *Transport) putOrCloseIdleConn(pconn *persistConn) {
@@ -1269,14 +1269,14 @@ func (t *Transport) dial(ctx context.Context, network, addr string) (net.Conn, e
 	if t.DialContext != nil {
 		c, err := t.DialContext(ctx, network, addr)
 		if c == nil && err == nil {
-			err = errors.New("github.com/nukilabs/http: Transport.DialContext hook returned (nil, nil)")
+			err = errors.New("nukilabs/http: Transport.DialContext hook returned (nil, nil)")
 		}
 		return c, err
 	}
 	if t.Dial != nil {
 		c, err := t.Dial(network, addr)
 		if c == nil && err == nil {
-			err = errors.New("github.com/nukilabs/http: Transport.Dial hook returned (nil, nil)")
+			err = errors.New("nukilabs/http: Transport.Dial hook returned (nil, nil)")
 		}
 		return c, err
 	}
@@ -1337,7 +1337,7 @@ func (w *wantConn) tryDeliver(pc *persistConn, err error, idleAt time.Time) bool
 		return false
 	}
 	if (pc == nil) == (err == nil) {
-		panic("github.com/nukilabs/http: internal error: misuse of tryDeliver")
+		panic("nukilabs/http: internal error: misuse of tryDeliver")
 	}
 	w.ctx = nil
 	w.done = true
@@ -1350,7 +1350,7 @@ func (w *wantConn) tryDeliver(pc *persistConn, err error, idleAt time.Time) bool
 
 // cancel marks w as no longer wanting a result (for example, due to cancellation).
 // If a connection has been delivered already, cancel returns it with t.putOrCloseIdleConn.
-func (w *wantConn) cancel(t *Transport, err error) {
+func (w *wantConn) cancel(t *Transport) {
 	w.mu.Lock()
 	var pc *persistConn
 	if w.done {
@@ -1464,7 +1464,7 @@ func (t *Transport) customDialTLS(ctx context.Context, network, addr string) (co
 		conn, err = t.DialTLS(network, addr)
 	}
 	if conn == nil && err == nil {
-		err = errors.New("github.com/nukilabs/http: Transport.DialTLS or DialTLSContext returned (nil, nil)")
+		err = errors.New("nukilabs/http: Transport.DialTLS or DialTLSContext returned (nil, nil)")
 	}
 	return
 }
@@ -1499,7 +1499,7 @@ func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (_ *persis
 	}
 	defer func() {
 		if err != nil {
-			w.cancel(t, err)
+			w.cancel(t)
 		}
 	}()
 
@@ -1630,7 +1630,7 @@ func (t *Transport) decConnsPerHost(key connectMethodKey) {
 	if n == 0 {
 		// Shouldn't happen, but if it does, the counting is buggy and could
 		// easily lead to a silent deadlock, so report the problem loudly.
-		panic("github.com/nukilabs/http: internal error: connCount underflow")
+		panic("nukilabs/http: internal error: connCount underflow")
 	}
 
 	// Can we hand this count to a goroutine still waiting to dial?
@@ -2218,7 +2218,7 @@ func (pc *persistConn) mapRoundTripError(req *transportRequest, startBytesWritte
 		if pc.nwrite == startBytesWritten {
 			return nothingWrittenError{err}
 		}
-		return fmt.Errorf("github.com/nukilabs/http: HTTP/1.x transport connection broken: %w", err)
+		return fmt.Errorf("nukilabs/http: HTTP/1.x transport connection broken: %w", err)
 	}
 	return err
 }
@@ -2287,7 +2287,7 @@ func (pc *persistConn) readLoop() {
 
 		if err != nil {
 			if pc.readLimit <= 0 {
-				err = fmt.Errorf("github.com/nukilabs/http: server response headers exceeded %d bytes; aborted", pc.maxHeaderResponseSize())
+				err = fmt.Errorf("nukilabs/http: server response headers exceeded %d bytes; aborted", pc.maxHeaderResponseSize())
 			}
 
 			select {
@@ -2567,6 +2567,13 @@ func (b *readWriteCloserBody) Read(p []byte) (n int, err error) {
 	return b.ReadWriteCloser.Read(p)
 }
 
+func (b *readWriteCloserBody) CloseWrite() error {
+	if cw, ok := b.ReadWriteCloser.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return fmt.Errorf("CloseWrite: %w", ErrNotSupported)
+}
+
 // nothingWrittenError wraps a write errors which ended up writing zero bytes.
 type nothingWrittenError struct {
 	error
@@ -2704,16 +2711,16 @@ func (e *timeoutError) Timeout() bool     { return true }
 func (e *timeoutError) Temporary() bool   { return true }
 func (e *timeoutError) Is(err error) bool { return err == context.DeadlineExceeded }
 
-var errTimeout error = &timeoutError{"github.com/nukilabs/http: timeout awaiting response headers"}
+var errTimeout error = &timeoutError{"nukilabs/http: timeout awaiting response headers"}
 
 // errRequestCanceled is set to be identical to the one from h2 to facilitate
 // testing.
 var errRequestCanceled = http2errRequestCanceled
-var errRequestCanceledConn = errors.New("github.com/nukilabs/http: request canceled while waiting for connection") // TODO: unify?
+var errRequestCanceledConn = errors.New("nukilabs/http: request canceled while waiting for connection") // TODO: unify?
 
 // errRequestDone is used to cancel the round trip Context after a request is successfully done.
 // It should not be seen by the user.
-var errRequestDone = errors.New("github.com/nukilabs/http: request completed")
+var errRequestDone = errors.New("nukilabs/http: request completed")
 
 func nop() {}
 
@@ -2916,11 +2923,17 @@ func (pc *persistConn) closeLocked(err error) {
 	pc.mutateHeaderFunc = nil
 }
 
-var portMap = map[string]string{
-	"http":    "80",
-	"https":   "443",
-	"socks5":  "1080",
-	"socks5h": "1080",
+func schemePort(scheme string) string {
+	switch scheme {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	case "socks5", "socks5h":
+		return "1080"
+	default:
+		return ""
+	}
 }
 
 func idnaASCIIFromURL(url *url.URL) string {
@@ -2935,7 +2948,7 @@ func idnaASCIIFromURL(url *url.URL) string {
 func canonicalAddr(url *url.URL) string {
 	port := url.Port()
 	if port == "" {
-		port = portMap[url.Scheme]
+		port = schemePort(url.Scheme)
 	}
 	return net.JoinHostPort(idnaASCIIFromURL(url), port)
 }
@@ -3049,7 +3062,7 @@ type tlsHandshakeTimeoutError struct{}
 func (tlsHandshakeTimeoutError) Timeout() bool   { return true }
 func (tlsHandshakeTimeoutError) Temporary() bool { return true }
 func (tlsHandshakeTimeoutError) Error() string {
-	return "github.com/nukilabs/http: TLS handshake timeout"
+	return "nukilabs/http: TLS handshake timeout"
 }
 
 // fakeLocker is a sync.Locker which does nothing. It's used to guard

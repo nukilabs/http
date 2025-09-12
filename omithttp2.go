@@ -18,7 +18,7 @@ func init() {
 
 const noHTTP2 = "no bundled HTTP/2" // should never see this
 
-var http2errRequestCanceled = errors.New("github.com/nukilabs/http: request canceled")
+var http2errRequestCanceled = errors.New("nukilabs/http: request canceled")
 
 var http2goAwayTimeout = 1 * time.Second
 
