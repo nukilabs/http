@@ -65,12 +65,13 @@ func configFromServer(h1 *http.Server, h2 *Server) http2Config {
 // (the net/http Transport).
 func configFromTransport(h2 *Transport) http2Config {
 	conf := http2Config{
-		MaxEncoderHeaderTableSize: h2.MaxEncoderHeaderTableSize,
-		MaxDecoderHeaderTableSize: h2.MaxDecoderHeaderTableSize,
-		MaxReadFrameSize:          h2.MaxReadFrameSize,
-		SendPingTimeout:           h2.ReadIdleTimeout,
-		PingTimeout:               h2.PingTimeout,
-		WriteByteTimeout:          h2.WriteByteTimeout,
+		MaxEncoderHeaderTableSize:    h2.MaxEncoderHeaderTableSize,
+		MaxDecoderHeaderTableSize:    h2.MaxDecoderHeaderTableSize,
+		MaxReadFrameSize:             h2.MaxReadFrameSize,
+		MaxUploadBufferPerConnection: h2.MaxUploadBufferPerConnection,
+		SendPingTimeout:              h2.ReadIdleTimeout,
+		PingTimeout:                  h2.PingTimeout,
+		WriteByteTimeout:             h2.WriteByteTimeout,
 	}
 
 	// Unlike most config fields, where out-of-range values revert to the default,
