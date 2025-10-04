@@ -686,7 +686,7 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 
 	// Use the defaultUserAgent unless the Header contains one, which
 	// may be blank to not send the header.
-	if !(r.Header.has("User-Agent") || r.Header.has("user-agent")) {
+	if !r.Header.has("User-Agent") {
 		r.Header.Set("User-Agent", defaultUserAgent)
 	}
 

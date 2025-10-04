@@ -64,6 +64,17 @@ func (h Header) Get(key string) string {
 	return textproto.MIMEHeader(h).Get(key)
 }
 
+// Has reports whether the header contains the given key, even if it's
+// set to 0-length slice.
+// It is case insensitive; [textproto.CanonicalMIMEHeaderKey] is
+// used to canonicalize the provided key; Has assumes that all
+// keys are stored in canonical form. To use non-canonical keys,
+// access the map directly.
+func (h Header) Has(key string) bool {
+	_, ok := h[textproto.CanonicalMIMEHeaderKey(key)]
+	return ok
+}
+
 // Values returns all values associated with the given key.
 // It is case insensitive; [textproto.CanonicalMIMEHeaderKey] is
 // used to canonicalize the provided key. To use non-canonical
