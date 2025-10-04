@@ -1088,12 +1088,13 @@ func http2configFromServer(h1 *Server, h2 *http2Server) http2http2Config {
 // (the net/http Transport).
 func http2configFromTransport(h2 *http2Transport) http2http2Config {
 	conf := http2http2Config{
-		MaxEncoderHeaderTableSize: h2.MaxEncoderHeaderTableSize,
-		MaxDecoderHeaderTableSize: h2.MaxDecoderHeaderTableSize,
-		MaxReadFrameSize:          h2.MaxReadFrameSize,
-		SendPingTimeout:           h2.ReadIdleTimeout,
-		PingTimeout:               h2.PingTimeout,
-		WriteByteTimeout:          h2.WriteByteTimeout,
+		MaxEncoderHeaderTableSize:    h2.MaxEncoderHeaderTableSize,
+		MaxDecoderHeaderTableSize:    h2.MaxDecoderHeaderTableSize,
+		MaxReadFrameSize:             h2.MaxReadFrameSize,
+		MaxUploadBufferPerConnection: h2.MaxUploadBufferPerConnection,
+		SendPingTimeout:              h2.ReadIdleTimeout,
+		PingTimeout:                  h2.PingTimeout,
+		WriteByteTimeout:             h2.WriteByteTimeout,
 	}
 
 	// Unlike most config fields, where out-of-range values revert to the default,
@@ -3421,101 +3422,6 @@ func http2cutoff64(base int) uint64 {
 		return 0
 	}
 	return (1<<64-1)/uint64(base) + 1
-}
-
-var (
-	http2commonBuildOnce   sync.Once
-	http2commonLowerHeader map[string]string // Go-Canonical-Case -> lower-case
-	http2commonCanonHeader map[string]string // lower-case -> Go-Canonical-Case
-)
-
-func http2buildCommonHeaderMapsOnce() {
-	http2commonBuildOnce.Do(http2buildCommonHeaderMaps)
-}
-
-func http2buildCommonHeaderMaps() {
-	common := []string{
-		"accept",
-		"accept-charset",
-		"accept-encoding",
-		"accept-language",
-		"accept-ranges",
-		"age",
-		"access-control-allow-credentials",
-		"access-control-allow-headers",
-		"access-control-allow-methods",
-		"access-control-allow-origin",
-		"access-control-expose-headers",
-		"access-control-max-age",
-		"access-control-request-headers",
-		"access-control-request-method",
-		"allow",
-		"authorization",
-		"cache-control",
-		"content-disposition",
-		"content-encoding",
-		"content-language",
-		"content-length",
-		"content-location",
-		"content-range",
-		"content-type",
-		"cookie",
-		"date",
-		"etag",
-		"expect",
-		"expires",
-		"from",
-		"host",
-		"if-match",
-		"if-modified-since",
-		"if-none-match",
-		"if-unmodified-since",
-		"last-modified",
-		"link",
-		"location",
-		"max-forwards",
-		"origin",
-		"proxy-authenticate",
-		"proxy-authorization",
-		"range",
-		"referer",
-		"refresh",
-		"retry-after",
-		"server",
-		"set-cookie",
-		"strict-transport-security",
-		"trailer",
-		"transfer-encoding",
-		"user-agent",
-		"vary",
-		"via",
-		"www-authenticate",
-		"x-forwarded-for",
-		"x-forwarded-proto",
-	}
-	http2commonLowerHeader = make(map[string]string, len(common))
-	http2commonCanonHeader = make(map[string]string, len(common))
-	for _, v := range common {
-		chk := CanonicalHeaderKey(v)
-		http2commonLowerHeader[chk] = v
-		http2commonCanonHeader[v] = chk
-	}
-}
-
-func http2lowerHeader(v string) (lower string, ascii bool) {
-	http2buildCommonHeaderMapsOnce()
-	if s, ok := http2commonLowerHeader[v]; ok {
-		return s, true
-	}
-	return http2asciiToLower(v)
-}
-
-func http2canonicalHeader(v string) string {
-	http2buildCommonHeaderMapsOnce()
-	if s, ok := http2commonCanonHeader[v]; ok {
-		return s
-	}
-	return CanonicalHeaderKey(v)
 }
 
 var (
@@ -9113,6 +9019,7 @@ func (cc *http2ClientConn) writeHeaders(streamID uint32, endStream bool, maxFram
 				BlockFragment: chunk,
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
+				Priority:      cc.t.HeaderPriority,
 			})
 			first = false
 		} else {
