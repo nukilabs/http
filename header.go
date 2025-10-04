@@ -117,7 +117,8 @@ func (h Header) Write(w io.Writer) error {
 }
 
 func (h Header) write(w io.Writer, trace *httptrace.ClientTrace) error {
-	return h.writeSubset(w, nil, trace)
+	exclude := map[string]bool{"Priority": true}
+	return h.writeSubset(w, exclude, trace)
 }
 
 // Clone returns a copy of h or nil if h is nil.
