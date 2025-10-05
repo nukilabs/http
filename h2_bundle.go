@@ -7612,6 +7612,7 @@ type http2ClientConn struct {
 	nextStreamID     uint32
 	pendingRequests  int                       // requests blocked and waiting to be sent because len(streams) == maxConcurrentStreams
 	pings            map[[8]byte]chan struct{} // in flight ping data to notification channel
+	nextPingID       uint64                    // next sequential ping ID
 	br               *bufio.Reader
 	lastActive       time.Time
 	lastIdle         time.Time // time last idle
@@ -10212,21 +10213,15 @@ func (rl *http2clientConnReadLoop) processResetStream(f *http2RSTStreamFrame) er
 // Ping sends a PING frame to the server and waits for the ack.
 func (cc *http2ClientConn) Ping(ctx context.Context) error {
 	c := make(chan struct{})
-	// Generate a random payload
+	// Generate a sequential numeric payload
 	var p [8]byte
-	for {
-		if _, err := rand.Read(p[:]); err != nil {
-			return err
-		}
-		cc.mu.Lock()
-		// check for dup before insert
-		if _, found := cc.pings[p]; !found {
-			cc.pings[p] = c
-			cc.mu.Unlock()
-			break
-		}
-		cc.mu.Unlock()
-	}
+	cc.mu.Lock()
+	cc.nextPingID++
+	pingID := cc.nextPingID
+	binary.BigEndian.PutUint64(p[:], pingID)
+	cc.pings[p] = c
+	cc.mu.Unlock()
+
 	var pingError error
 	errc := make(chan struct{})
 	go func() {
@@ -10303,7 +10298,11 @@ func (cc *http2ClientConn) writeStreamReset(streamID uint32, code http2ErrCode, 
 	cc.fr.WriteRSTStream(streamID, code)
 	if ping {
 		var payload [8]byte
-		rand.Read(payload[:])
+		cc.mu.Lock()
+		cc.nextPingID++
+		pingID := cc.nextPingID
+		cc.mu.Unlock()
+		binary.BigEndian.PutUint64(payload[:], pingID)
 		cc.fr.WritePing(false, payload)
 	}
 	cc.bw.Flush()
