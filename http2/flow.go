@@ -6,6 +6,8 @@
 
 package http2
 
+import "time"
+
 // inflowMinRefresh is the minimum number of bytes we'll send for a
 // flow control window update.
 const inflowMinRefresh = 4 << 10
@@ -14,13 +16,19 @@ const inflowMinRefresh = 4 << 10
 // It tracks both the latest window sent to the peer (used for enforcement)
 // and the accumulated unsent window.
 type inflow struct {
-	avail  int32
-	unsent int32
+	avail   int32
+	unsent  int32
+	max     int32
+	last    time.Time
+	timeout time.Duration
 }
 
 // init sets the initial window.
-func (f *inflow) init(n int32) {
+func (f *inflow) init(n int32, timeout time.Duration) {
 	f.avail = n
+	f.max = n
+	f.last = time.Now()
+	f.timeout = timeout
 }
 
 // add adds n bytes to the window, with a maximum window size of max,
@@ -28,8 +36,9 @@ func (f *inflow) init(n int32) {
 // For example, the user read from a {Request,Response} body and consumed
 // some of the buffered data, so the peer can now send more.
 // It returns the number of bytes to send in a WINDOW_UPDATE frame to the peer.
-// Window updates are accumulated and sent when the unsent capacity
-// is at least inflowMinRefresh or will at least double the peer's available window.
+// Window updates are accumulated and sent when the last update was at least
+// inflowMinRefresh ago, or when the accumulated unsent window update
+// will at least double the peer's available window.
 func (f *inflow) add(n int) (connAdd int32) {
 	if n < 0 {
 		panic("negative update")
@@ -42,13 +51,15 @@ func (f *inflow) add(n int) (connAdd int32) {
 		panic("flow control update exceeds maximum window size")
 	}
 	f.unsent = int32(unsent)
-	if f.unsent < inflowMinRefresh && f.unsent < f.avail {
-		// If there aren't at least inflowMinRefresh bytes of window to send,
+	elapsed := time.Since(f.last)
+	if (f.timeout == 0 || elapsed < f.timeout) && f.unsent < f.max/2 {
+		// If there wasn't much time since the last update
 		// and this update won't at least double the window, buffer the update for later.
 		return 0
 	}
 	f.avail += f.unsent
 	f.unsent = 0
+	f.last = time.Now()
 	return int32(unsent)
 }
 

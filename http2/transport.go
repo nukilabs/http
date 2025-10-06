@@ -91,6 +91,17 @@ type Transport struct {
 	// should be included in requests.
 	PseudoHeaderOrder []string
 
+	// InflowTimeout is the duration after which a connection-level
+	// flow control update will be sent if there is unsent
+	// window to send. If zero no timeout is used and updates are sent
+	// only when the accumulated unsent window will at least double
+	// the peer's available window.
+	InflowTimeout time.Duration
+
+	// PrefacePing specifies whether to send a PING frame as part of the
+	// connection preface, to ensure that the server knows we're alive.
+	PrefacePing bool
+
 	// DialTLSContext specifies an optional dial function with context for
 	// creating TLS connections for requests.
 	//
@@ -373,6 +384,7 @@ type ClientConn struct {
 	br               *bufio.Reader
 	lastActive       time.Time
 	lastIdle         time.Time // time last idle
+	lastReadTime     time.Time // time of last read
 	// Settings from peer: (also guarded by wmu)
 	maxFrameSize                uint32
 	maxConcurrentStreams        uint32
@@ -886,7 +898,7 @@ func (t *Transport) newClientConn(c net.Conn, singleUse bool) (*ClientConn, erro
 		cc.nextStreamID = priority.StreamID + 2
 	}
 
-	cc.inflow.init(conf.MaxUploadBufferPerConnection + initialWindowSize)
+	cc.inflow.init(conf.MaxUploadBufferPerConnection+initialWindowSize, cc.t.InflowTimeout)
 	cc.bw.Flush()
 	if cc.werr != nil {
 		cc.Close()
@@ -1590,6 +1602,11 @@ func (cs *clientStream) encodeAndWriteHeaders(req *http.Request) error {
 	default:
 	}
 
+	// Send preface ping if enabled.
+	if cc.t.PrefacePing {
+		go cc.prefacePing()
+	}
+
 	// Encode headers.
 	//
 	// we send: HEADERS{1}, CONTINUATION{0,} + DATA{0,} (DATA is
@@ -1918,6 +1935,12 @@ func (cs *clientStream) writeRequestBody(req *http.Request) (err error) {
 			data := remain[:allowed]
 			remain = remain[allowed:]
 			sentEnd = sawEOF && len(remain) == 0 && !hasTrailers
+
+			// Send preface ping if enabled.
+			if cc.t.PrefacePing && len(data) > 0 {
+				go cc.prefacePing()
+			}
+
 			err = cc.fr.WriteData(cs.ID, sentEnd, data)
 			if err == nil {
 				// TODO(bradfitz): this flush is for latency, not bandwidth.
@@ -2065,7 +2088,7 @@ type resAndError struct {
 func (cc *ClientConn) addStreamLocked(cs *clientStream) {
 	cs.flow.add(int32(cc.initialWindowSize))
 	cs.flow.setConnFlow(&cc.flow)
-	cs.inflow.init(cc.initialStreamRecvWindowSize)
+	cs.inflow.init(cc.initialStreamRecvWindowSize, cc.t.InflowTimeout)
 	cs.ID = cc.nextStreamID
 	cc.nextStreamID += 2
 	cc.streams[cs.ID] = cs
@@ -2239,9 +2262,12 @@ func (rl *clientConnReadLoop) run() error {
 	gotSettings := false
 	readIdleTimeout := cc.readIdleTimeout
 	var t *time.Timer
-	if readIdleTimeout != 0 {
+	if !cc.t.PrefacePing && readIdleTimeout != 0 {
 		t = time.AfterFunc(readIdleTimeout, cc.healthCheck)
 	}
+	cc.mu.Lock()
+	cc.lastReadTime = time.Now()
+	cc.mu.Unlock()
 	for {
 		f, err := cc.fr.ReadFrame()
 		if t != nil {
@@ -2963,6 +2989,36 @@ func (rl *clientConnReadLoop) processResetStream(f *RSTStreamFrame) error {
 
 	cs.bufPipe.CloseWithError(serr)
 	return nil
+}
+
+// prefacePing sends a preface PING frame to the server if there
+// has been no activity on the connection for an interval.
+func (cc *ClientConn) prefacePing() {
+	cc.mu.Lock()
+
+	if len(cc.pings) > 0 || cc.readIdleTimeout == 0 {
+		cc.mu.Unlock()
+		return
+	}
+
+	// If there has been no read activity in the session for some time,
+	// then send a preface-PING.
+	elapsed := time.Since(cc.lastReadTime)
+	if elapsed < cc.readIdleTimeout {
+		cc.mu.Unlock()
+		return
+	}
+	cc.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), cc.pingTimeout)
+	defer cancel()
+	err := cc.Ping(ctx)
+	if err != nil {
+		cc.vlogf("http2: Transport health check failure: %v", err)
+		cc.closeForLostPing()
+	} else {
+		cc.vlogf("http2: Transport health check success")
+	}
 }
 
 // Ping sends a PING frame to the server and waits for the ack.

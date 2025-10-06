@@ -1471,13 +1471,19 @@ const http2inflowMinRefresh = 4 << 10
 // It tracks both the latest window sent to the peer (used for enforcement)
 // and the accumulated unsent window.
 type http2inflow struct {
-	avail  int32
-	unsent int32
+	avail   int32
+	unsent  int32
+	max     int32
+	last    time.Time
+	timeout time.Duration
 }
 
 // init sets the initial window.
-func (f *http2inflow) init(n int32) {
+func (f *http2inflow) init(n int32, timeout time.Duration) {
 	f.avail = n
+	f.max = n
+	f.last = time.Now()
+	f.timeout = timeout
 }
 
 // add adds n bytes to the window, with a maximum window size of max,
@@ -1485,8 +1491,9 @@ func (f *http2inflow) init(n int32) {
 // For example, the user read from a {Request,Response} body and consumed
 // some of the buffered data, so the peer can now send more.
 // It returns the number of bytes to send in a WINDOW_UPDATE frame to the peer.
-// Window updates are accumulated and sent when the unsent capacity
-// is at least inflowMinRefresh or will at least double the peer's available window.
+// Window updates are accumulated and sent when the last update was at least
+// inflowMinRefresh ago, or when the accumulated unsent window update
+// will at least double the peer's available window.
 func (f *http2inflow) add(n int) (connAdd int32) {
 	if n < 0 {
 		panic("negative update")
@@ -1499,13 +1506,15 @@ func (f *http2inflow) add(n int) (connAdd int32) {
 		panic("flow control update exceeds maximum window size")
 	}
 	f.unsent = int32(unsent)
-	if f.unsent < http2inflowMinRefresh && f.unsent < f.avail {
-		// If there aren't at least inflowMinRefresh bytes of window to send,
+	elapsed := time.Since(f.last)
+	if (f.timeout == 0 || elapsed < f.timeout) && f.unsent < f.max/2 {
+		// If there wasn't much time since the last update
 		// and this update won't at least double the window, buffer the update for later.
 		return 0
 	}
 	f.avail += f.unsent
 	f.unsent = 0
+	f.last = time.Now()
 	return int32(unsent)
 }
 
@@ -4383,7 +4392,7 @@ func (s *http2Server) serveConn(c net.Conn, opts *http2ServeConnOpts, newf func(
 	// configured value for inflow, that will be updated when we send a
 	// WINDOW_UPDATE shortly after sending SETTINGS.
 	sc.flow.add(http2initialWindowSize)
-	sc.inflow.init(http2initialWindowSize)
+	sc.inflow.init(http2initialWindowSize, 0)
 	sc.hpackEncoder = hpack.NewEncoder(&sc.headerWriteBuf)
 	sc.hpackEncoder.SetMaxDynamicTableSizeLimit(conf.MaxEncoderHeaderTableSize)
 
@@ -6132,7 +6141,7 @@ func (sc *http2serverConn) newStream(id, pusherID uint32, state http2streamState
 	st.cw.Init()
 	st.flow.conn = &sc.flow // link to conn-level counter
 	st.flow.add(sc.initialStreamSendWindowSize)
-	st.inflow.init(sc.initialStreamRecvWindowSize)
+	st.inflow.init(sc.initialStreamRecvWindowSize, 0)
 	if sc.hs.WriteTimeout > 0 {
 		st.writeDeadline = time.AfterFunc(sc.hs.WriteTimeout, st.onWriteTimeout)
 	}
@@ -7334,6 +7343,17 @@ type http2Transport struct {
 	// should be included in requests.
 	PseudoHeaderOrder []string
 
+	// InflowTimeout is the duration after which a connection-level
+	// flow control update will be sent if there is unsent
+	// window to send. If zero no timeout is used and updates are sent
+	// only when the accumulated unsent window will at least double
+	// the peer's available window.
+	InflowTimeout time.Duration
+
+	// PrefacePing specifies whether to send a PING frame as part of the
+	// connection preface, to ensure that the server knows we're alive.
+	PrefacePing bool
+
 	// DialTLSContext specifies an optional dial function with context for
 	// creating TLS connections for requests.
 	//
@@ -7616,6 +7636,7 @@ type http2ClientConn struct {
 	br               *bufio.Reader
 	lastActive       time.Time
 	lastIdle         time.Time // time last idle
+	lastReadTime     time.Time // time of last read
 	// Settings from peer: (also guarded by wmu)
 	maxFrameSize                uint32
 	maxConcurrentStreams        uint32
@@ -8130,7 +8151,7 @@ func (t *http2Transport) newClientConn(c net.Conn, singleUse bool) (*http2Client
 		cc.nextStreamID = priority.StreamID + 2
 	}
 
-	cc.inflow.init(conf.MaxUploadBufferPerConnection + http2initialWindowSize)
+	cc.inflow.init(conf.MaxUploadBufferPerConnection+http2initialWindowSize, cc.t.InflowTimeout)
 	cc.bw.Flush()
 	if cc.werr != nil {
 		cc.Close()
@@ -8834,6 +8855,11 @@ func (cs *http2clientStream) encodeAndWriteHeaders(req *Request) error {
 	default:
 	}
 
+	// Send preface ping if enabled.
+	if cc.t.PrefacePing {
+		go cc.prefacePing()
+	}
+
 	// Encode headers.
 	//
 	// we send: HEADERS{1}, CONTINUATION{0,} + DATA{0,} (DATA is
@@ -9163,6 +9189,12 @@ func (cs *http2clientStream) writeRequestBody(req *Request) (err error) {
 			data := remain[:allowed]
 			remain = remain[allowed:]
 			sentEnd = sawEOF && len(remain) == 0 && !hasTrailers
+
+			// Send preface ping if enabled.
+			if cc.t.PrefacePing && len(data) > 0 {
+				go cc.prefacePing()
+			}
+
 			err = cc.fr.WriteData(cs.ID, sentEnd, data)
 			if err == nil {
 				// TODO(bradfitz): this flush is for latency, not bandwidth.
@@ -9310,7 +9342,7 @@ type http2resAndError struct {
 func (cc *http2ClientConn) addStreamLocked(cs *http2clientStream) {
 	cs.flow.add(int32(cc.initialWindowSize))
 	cs.flow.setConnFlow(&cc.flow)
-	cs.inflow.init(cc.initialStreamRecvWindowSize)
+	cs.inflow.init(cc.initialStreamRecvWindowSize, cc.t.InflowTimeout)
 	cs.ID = cc.nextStreamID
 	cc.nextStreamID += 2
 	cc.streams[cs.ID] = cs
@@ -9484,9 +9516,12 @@ func (rl *http2clientConnReadLoop) run() error {
 	gotSettings := false
 	readIdleTimeout := cc.readIdleTimeout
 	var t *time.Timer
-	if readIdleTimeout != 0 {
+	if !cc.t.PrefacePing && readIdleTimeout != 0 {
 		t = time.AfterFunc(readIdleTimeout, cc.healthCheck)
 	}
+	cc.mu.Lock()
+	cc.lastReadTime = time.Now()
+	cc.mu.Unlock()
 	for {
 		f, err := cc.fr.ReadFrame()
 		if t != nil {
@@ -10208,6 +10243,36 @@ func (rl *http2clientConnReadLoop) processResetStream(f *http2RSTStreamFrame) er
 
 	cs.bufPipe.CloseWithError(serr)
 	return nil
+}
+
+// prefacePing sends a preface PING frame to the server if there
+// has been no activity on the connection for an interval.
+func (cc *http2ClientConn) prefacePing() {
+	cc.mu.Lock()
+
+	if len(cc.pings) > 0 || cc.readIdleTimeout == 0 {
+		cc.mu.Unlock()
+		return
+	}
+
+	// If there has been no read activity in the session for some time,
+	// then send a preface-PING.
+	elapsed := time.Since(cc.lastReadTime)
+	if elapsed < cc.readIdleTimeout {
+		cc.mu.Unlock()
+		return
+	}
+	cc.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), cc.pingTimeout)
+	defer cancel()
+	err := cc.Ping(ctx)
+	if err != nil {
+		cc.vlogf("http2: Transport health check failure: %v", err)
+		cc.closeForLostPing()
+	} else {
+		cc.vlogf("http2: Transport health check success")
+	}
 }
 
 // Ping sends a PING frame to the server and waits for the ack.
