@@ -85,7 +85,7 @@ type Transport struct {
 
 	// HeaderPriority is the HTTP/2 PRIORITY sent in the HEADERS frame.
 	// If zero, no PRIORITY is sent.
-	HeaderPriority PriorityParam
+	HeaderPriority func(*http.Request) PriorityParam
 
 	// PseudoHeaderOrder specifies the order in which pseudo-header fields
 	// should be included in requests.
@@ -1624,7 +1624,7 @@ func (cs *clientStream) encodeAndWriteHeaders(req *http.Request) error {
 	// Write the request.
 	endStream := !res.HasBody && !res.HasTrailers
 	cs.sentHeaders = true
-	err = cc.writeHeaders(cs.ID, endStream, int(cc.maxFrameSize), hdrs)
+	err = cc.writeHeaders(cs.ID, endStream, int(cc.maxFrameSize), hdrs, cc.t.HeaderPriority(req))
 	traceWroteHeaders(cs.trace)
 	return err
 }
@@ -1778,7 +1778,7 @@ func (cc *ClientConn) awaitOpenSlotForStreamLocked(cs *clientStream) error {
 }
 
 // requires cc.wmu be held
-func (cc *ClientConn) writeHeaders(streamID uint32, endStream bool, maxFrameSize int, hdrs []byte) error {
+func (cc *ClientConn) writeHeaders(streamID uint32, endStream bool, maxFrameSize int, hdrs []byte, priority PriorityParam) error {
 	first := true // first frame written (HEADERS is first, then CONTINUATION)
 	for len(hdrs) > 0 && cc.werr == nil {
 		chunk := hdrs
@@ -1793,7 +1793,7 @@ func (cc *ClientConn) writeHeaders(streamID uint32, endStream bool, maxFrameSize
 				BlockFragment: chunk,
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
-				Priority:      cc.t.HeaderPriority,
+				Priority:      priority,
 			})
 			first = false
 		} else {
@@ -1989,7 +1989,7 @@ func (cs *clientStream) writeRequestBody(req *http.Request) (err error) {
 	// Two ways to send END_STREAM: either with trailers, or
 	// with an empty DATA frame.
 	if len(trls) > 0 {
-		err = cc.writeHeaders(cs.ID, true, maxFrameSize, trls)
+		err = cc.writeHeaders(cs.ID, true, maxFrameSize, trls, cc.t.HeaderPriority(req))
 	} else {
 		err = cc.fr.WriteData(cs.ID, true, nil)
 	}
