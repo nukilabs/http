@@ -104,6 +104,18 @@ var reqWriteExcludeHeader = map[string]bool{
 	"Trailer":           true,
 }
 
+type Priority uint8
+
+const (
+	PriorityHighest Priority = iota
+	PriorityHigh
+	PriorityMedium
+	PriorityLow
+	PriorityLowest
+	PriorityIdle
+	PriorityThrottled
+)
+
 // A Request represents an HTTP request received by a server
 // or to be sent by a client.
 //
@@ -137,6 +149,12 @@ type Request struct {
 	Proto      string // "HTTP/1.0"
 	ProtoMajor int    // 1
 	ProtoMinor int    // 0
+
+	// The priority of the request. The higher the priority, the more likely
+	// the request is to be processed before other requests.
+	//
+	// This field most likely will be used for HTTP/2 requests.
+	Priority Priority
 
 	// Header contains the request header fields either received
 	// by the server or to be sent by the client.
@@ -410,6 +428,15 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	}
 	r2.otherValues = maps.Clone(r.otherValues)
 	return r2
+}
+
+// SetPriority sets the priority of the request.
+func (r *Request) SetPriority(p Priority, incremental bool) {
+	r.Priority = p
+	if incremental {
+		r.Header.Set("Priority", fmt.Sprintf("u=%d, i", p))
+	}
+	r.Header.Set("Priority", fmt.Sprintf("u=%d", p))
 }
 
 // ProtoAtLeast reports whether the HTTP protocol used
