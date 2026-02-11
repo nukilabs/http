@@ -225,6 +225,13 @@ type Transport struct {
 	*transportTestHooks
 }
 
+func (t *Transport) headerPriority(req *http.Request) PriorityParam {
+	if t.HeaderPriority != nil {
+		return t.HeaderPriority(req)
+	}
+	return PriorityParam{}
+}
+
 // Hook points used for testing.
 // Outside of tests, t.transportTestHooks is nil and these all have minimal implementations.
 // Inside tests, see the testSyncHooks function docs.
@@ -1624,7 +1631,7 @@ func (cs *clientStream) encodeAndWriteHeaders(req *http.Request) error {
 	// Write the request.
 	endStream := !res.HasBody && !res.HasTrailers
 	cs.sentHeaders = true
-	err = cc.writeHeaders(cs.ID, endStream, int(cc.maxFrameSize), hdrs, cc.t.HeaderPriority(req))
+	err = cc.writeHeaders(cs.ID, endStream, int(cc.maxFrameSize), hdrs, cc.t.headerPriority(req))
 	traceWroteHeaders(cs.trace)
 	return err
 }
@@ -1989,7 +1996,7 @@ func (cs *clientStream) writeRequestBody(req *http.Request) (err error) {
 	// Two ways to send END_STREAM: either with trailers, or
 	// with an empty DATA frame.
 	if len(trls) > 0 {
-		err = cc.writeHeaders(cs.ID, true, maxFrameSize, trls, cc.t.HeaderPriority(req))
+		err = cc.writeHeaders(cs.ID, true, maxFrameSize, trls, cc.t.headerPriority(req))
 	} else {
 		err = cc.fr.WriteData(cs.ID, true, nil)
 	}
