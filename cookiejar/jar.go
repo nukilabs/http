@@ -222,16 +222,23 @@ func (j *Jar) cookies(u *url.URL, now time.Time) (cookies []*http.Cookie) {
 		return cmp.Compare(a.seqNum, b.seqNum)
 	})
 	for _, e := range selected {
+		var domain string
+		if !e.HostOnly {
+			domain = e.Domain
+		}
+		var expires time.Time
+		if e.Persistent {
+			expires = e.Expires
+		}
 		cookies = append(cookies, &http.Cookie{
 			Name:     e.Name,
 			Value:    e.Value,
 			Quoted:   e.Quoted,
 			Path:     e.Path,
-			Domain:   e.Domain,
-			Expires:  e.Expires,
+			Domain:   domain,
+			Expires:  expires,
 			Secure:   e.Secure,
 			HttpOnly: e.HttpOnly,
-			HostOnly: e.HostOnly,
 		})
 	}
 
