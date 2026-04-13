@@ -415,6 +415,9 @@ func defaultPath(path string) string {
 //
 // A malformed c.Domain will result in an error.
 func (j *Jar) newEntry(c *http.Cookie, now time.Time, defPath, host string) (e entry, remove bool, err error) {
+	if c.Name == "" {
+		return e, false, errEmptyName
+	}
 	e.Name = c.Name
 
 	if c.Path == "" || c.Path[0] != '/' {
@@ -465,6 +468,7 @@ func (j *Jar) newEntry(c *http.Cookie, now time.Time, defPath, host string) (e e
 }
 
 var (
+	errEmptyName       = errors.New("cookiejar: empty cookie name")
 	errIllegalDomain   = errors.New("cookiejar: illegal cookie domain attribute")
 	errMalformedDomain = errors.New("cookiejar: malformed cookie domain attribute")
 )
