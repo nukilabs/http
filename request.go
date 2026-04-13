@@ -435,8 +435,9 @@ func (r *Request) SetPriority(p Priority, incremental bool) {
 	r.Priority = p
 	if incremental {
 		r.Header.Set("Priority", fmt.Sprintf("u=%d, i", p))
+	} else {
+		r.Header.Set("Priority", fmt.Sprintf("u=%d", p))
 	}
-	r.Header.Set("Priority", fmt.Sprintf("u=%d", p))
 }
 
 // ProtoAtLeast reports whether the HTTP protocol used
