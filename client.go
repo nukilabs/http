@@ -175,6 +175,9 @@ func refererForURL(lastReq, newReq *url.URL, explicitRef string) string {
 func (c *Client) send(req *Request, deadline time.Time) (resp *Response, didTimeout func() bool, err error) {
 	if c.Jar != nil {
 		for _, cookie := range c.Jar.Cookies(req.URL) {
+			if _, skip := req.ExcludedCookies[cookie.Name]; skip {
+				continue
+			}
 			req.AddCookie(cookie)
 		}
 	}
@@ -659,13 +662,14 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 			}
 			ireq := reqs[0]
 			req = &Request{
-				Method:   redirectMethod,
-				Response: resp,
-				URL:      u,
-				Header:   make(Header),
-				Host:     host,
-				Cancel:   ireq.Cancel,
-				ctx:      ireq.ctx,
+				Method:          redirectMethod,
+				Response:        resp,
+				URL:             u,
+				Header:          make(Header),
+				Host:            host,
+				Cancel:          ireq.Cancel,
+				ctx:             ireq.ctx,
+				ExcludedCookies: ireq.ExcludedCookies,
 			}
 			if includeBody && ireq.GetBody != nil {
 				req.Body, err = ireq.GetBody()

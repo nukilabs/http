@@ -344,6 +344,15 @@ type Request struct {
 	// It is empty if the request was not matched against a pattern.
 	Pattern string
 
+	// ExcludedCookies is the set of cookie names that must not be attached
+	// to this request from the [Client]'s cookie jar, even if the jar holds
+	// them for the request's URL. Cookies set explicitly on the request via
+	// [Request.AddCookie] or the Cookie header are unaffected.
+	//
+	// Use [Request.ExcludeCookies] to populate this. The field is only
+	// consulted by the client; it is ignored by servers.
+	ExcludedCookies map[string]struct{}
+
 	// ctx is either the client or server context. It should only
 	// be modified via copying the whole Request using Clone or WithContext.
 	// It is unexported to prevent people from using Context wrong
@@ -416,6 +425,9 @@ func (r *Request) Clone(ctx context.Context) *Request {
 		copy(s2, s)
 		r2.TransferEncoding = s2
 	}
+	if s := r.ExcludedCookies; s != nil {
+		r2.ExcludedCookies = maps.Clone(s)
+	}
 	r2.Form = cloneURLValues(r.Form)
 	r2.PostForm = cloneURLValues(r.PostForm)
 	r2.MultipartForm = cloneMultipartForm(r.MultipartForm)
@@ -481,6 +493,23 @@ func (r *Request) Cookie(name string) (*Cookie, error) {
 		return c, nil
 	}
 	return nil, ErrNoCookie
+}
+
+// ExcludeCookies marks the given cookie names so they are not attached to
+// this request from the [Client]'s cookie jar, even if the jar holds them
+// for the request's URL. Names already excluded are kept; calling with no
+// names is a no-op. Cookies set explicitly via [Request.AddCookie] or the
+// Cookie header are unaffected.
+func (r *Request) ExcludeCookies(names ...string) {
+	if len(names) == 0 {
+		return
+	}
+	if r.ExcludedCookies == nil {
+		r.ExcludedCookies = make(map[string]struct{}, len(names))
+	}
+	for _, name := range names {
+		r.ExcludedCookies[name] = struct{}{}
+	}
 }
 
 // AddCookie adds a cookie to the request. Per RFC 6265 section 5.4,
