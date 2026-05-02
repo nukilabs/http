@@ -185,7 +185,7 @@ func (c *Client) send(req *Request, deadline time.Time) (resp *Response, didTime
 	if err != nil {
 		return nil, didTimeout, err
 	}
-	if c.Jar != nil {
+	if c.Jar != nil && !req.DiscardResponseCookies {
 		if rc := resp.Cookies(); len(rc) > 0 {
 			c.Jar.SetCookies(req.URL, rc)
 		}
@@ -662,15 +662,16 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 			}
 			ireq := reqs[0]
 			req = &Request{
-				Method:          redirectMethod,
-				Response:        resp,
-				URL:             u,
-				Header:          make(Header),
-				Host:            host,
-				Cancel:          ireq.Cancel,
-				ctx:             ireq.ctx,
-				Priority:        ireq.Priority,
-				ExcludedCookies: ireq.ExcludedCookies,
+				Method:                 redirectMethod,
+				Response:               resp,
+				URL:                    u,
+				Header:                 make(Header),
+				Host:                   host,
+				Cancel:                 ireq.Cancel,
+				ctx:                    ireq.ctx,
+				Priority:               ireq.Priority,
+				ExcludedCookies:        ireq.ExcludedCookies,
+				DiscardResponseCookies: ireq.DiscardResponseCookies,
 			}
 			if includeBody && ireq.GetBody != nil {
 				req.Body, err = ireq.GetBody()

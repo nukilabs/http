@@ -353,6 +353,13 @@ type Request struct {
 	// consulted by the client; it is ignored by servers.
 	ExcludedCookies map[string]struct{}
 
+	// DiscardResponseCookies, when true, prevents the [Client] from passing
+	// Set-Cookie values from this request's response to its cookie jar.
+	// The jar is still consulted for outbound cookies on this request
+	// (subject to ExcludedCookies). This field is only consulted by the
+	// client; it is ignored by servers.
+	DiscardResponseCookies bool
+
 	// ctx is either the client or server context. It should only
 	// be modified via copying the whole Request using Clone or WithContext.
 	// It is unexported to prevent people from using Context wrong
