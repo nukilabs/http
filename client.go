@@ -669,6 +669,7 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 				Host:            host,
 				Cancel:          ireq.Cancel,
 				ctx:             ireq.ctx,
+				Priority:        ireq.Priority,
 				ExcludedCookies: ireq.ExcludedCookies,
 			}
 			if includeBody && ireq.GetBody != nil {
